@@ -79,9 +79,7 @@ export class LambdaColdStartStack extends Stack {
       effect: iam.Effect.ALLOW,
       principals: [new iam.ServicePrincipal(cloudwatchLogsPrincipalCustomerOne)],
       actions: ['execute-api:Invoke'],
-      resources: [
-        api.arnForExecuteApi('POST', '/ingest'),
-      ],
+      resources: ['*'],
       conditions: {
         StringEquals: { 'aws:SourceAccount': customerOneAccountId },
       },

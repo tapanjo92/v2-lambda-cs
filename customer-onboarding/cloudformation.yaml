@@ -120,3 +120,4 @@ Outputs:
     Description: "ARN of the IAM Role created for CloudWatch Logs to forward events to the destination."
     Export:
       Name: !Sub "${AWS::StackName}-ForwarderRoleArn"
+
