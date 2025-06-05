@@ -1,34 +1,71 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Lambda Cold Start SaaS - Log Subscription Deployer (v3 - fixes circular dependency)
+Description: Lambda Cold Start SaaS - Relay + Deployer Lambda Integration
 
 Parameters:
-  DestinationArn:
+  RelayLambdaS3Bucket:
     Type: String
-    Description: "ARN of your SaaS API Gateway endpoint that CloudWatch Logs will send events to (e.g., arn:aws:execute-api:region:account-id:api-id/stage/POST/ingest)"
+    Description: S3 bucket for Relay Lambda zip
+  RelayLambdaS3Key:
+    Type: String
+    Description: S3 key for Relay Lambda zip
+  DeployerLambdaS3Bucket:
+    Type: String
+    Description: S3 bucket for Deployer Lambda zip
+  DeployerLambdaS3Key:
+    Type: String
+    Description: S3 key for Deployer Lambda zip
+  DestUrl:
+    Type: String
+    Description: Your SaaS API Gateway endpoint (e.g. https://xxx.execute-api.ap-south-1.amazonaws.com/prod/ingest)
 
 Resources:
-  ForwarderRole:
+
+  # --- Relay Lambda and Role (forwards logs to your SaaS endpoint) ---
+  RelayLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: LambdaColdStartLogForwarderRole
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
-              Service: !Sub "logs.${AWS::Region}.amazonaws.com"
+              Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: AllowLogEventForwardingToSaaS
+        - PolicyName: "AllowLogs"
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - execute-api:Invoke
-                Resource: !Ref DestinationArn
+                  - logs:PutLogEvents
+                Resource: "*"
 
-  DeployerLambdaExecutionRole: # Changed order for clarity, but CloudFormation handles actual order
+  RelayLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs18.x
+      Timeout: 60
+      Role: !GetAtt RelayLambdaRole.Arn
+      Environment:
+        Variables:
+          DEST_URL: !Ref DestUrl
+      Code:
+        S3Bucket: !Ref RelayLambdaS3Bucket
+        S3Key: !Ref RelayLambdaS3Key
+
+  # Permission for CloudWatch Logs to invoke the Relay Lambda
+  RelayLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt RelayLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: logs.amazonaws.com
+      SourceAccount: !Ref "AWS::AccountId"
+
+  # --- Deployer Lambda and Role (auto-creates subscription filters to relay lambda) ---
+  DeployerLambdaRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -39,44 +76,44 @@ Resources:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: LogSubscriptionDeployerPolicy
+        - PolicyName: AllowCWLogs
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Effect: Allow # Permissions for DeployerFunction to manage log subscriptions
+              - Effect: Allow # Deployer needs to describe and subscribe all log groups
                 Action:
                   - logs:DescribeLogGroups
                   - logs:DescribeSubscriptionFilters
                   - logs:PutSubscriptionFilter
                 Resource: "*"
-              - Effect: Allow # Permission for DeployerFunction to create its log group
+              - Effect: Allow # Allow writing to /aws/lambda/* for its own logs
                 Action:
                   - logs:CreateLogGroup
-                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*" # Standard resource for creating log groups
-              - Effect: Allow # Permissions for DeployerFunction to write to its log streams
-                Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*:*" # Allows writing to any log group under /aws/lambda/
-              - Effect: Allow # CRITICAL: Permission for DeployerFunction to pass the ForwarderRole
-                Action: iam:PassRole
-                Resource: !GetAtt ForwarderRole.Arn # Only allow passing this specific role
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*:*"
 
-  DeployerFunction:
+  DeployerLambda:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.handler
-      Runtime: nodejs18.x # Consider nodejs20.x for newer projects
+      Runtime: nodejs18.x
       Timeout: 300
-      Role: !GetAtt DeployerLambdaExecutionRole.Arn # Depends on DeployerLambdaExecutionRole
-      Code:
-        S3Bucket: cpaas-dev-inventory # Replace with your actual S3 bucket
-        S3Key: deployer-lambda.zip    # Replace with your actual S3 key
+      Role: !GetAtt DeployerLambdaRole.Arn
       Environment:
         Variables:
-          DESTINATION_ARN: !Ref DestinationArn
-          FORWARDER_ROLE_ARN: !GetAtt ForwarderRole.Arn
+          RELAY_ARN: !GetAtt RelayLambda.Arn
+      Code:
+        S3Bucket: !Ref DeployerLambdaS3Bucket
+        S3Key: !Ref DeployerLambdaS3Key
 
+  # Invoke Deployer Lambda on stack creation to subscribe all current log groups (Custom Resource)
+  RunDeployerLambda:
+    Type: Custom::RunDeployerLambda
+    Properties:
+      ServiceToken: !GetAtt DeployerLambda.Arn
+
+  # EventBridge rule: whenever a new log group is created, trigger deployer
   LogGroupCreatedRule:
     Type: AWS::Events::Rule
     Properties:
@@ -91,33 +128,23 @@ Resources:
           eventName:
             - CreateLogGroup
       Targets:
-        - Arn: !GetAtt DeployerFunction.Arn # Depends on DeployerFunction
-          Id: DeployerFunctionTarget
+        - Arn: !GetAtt DeployerLambda.Arn
+          Id: "DeployerLambdaTarget"
 
-  LambdaInvokePermission:
+  # Permission for EventBridge to invoke Deployer Lambda
+  DeployerLambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !GetAtt DeployerFunction.Arn # Depends on DeployerFunction
+      FunctionName: !GetAtt DeployerLambda.Arn
       Action: 'lambda:InvokeFunction'
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt LogGroupCreatedRule.Arn # Depends on LogGroupCreatedRule
-
-  RelayLambdaInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !GetAtt DeployerFunction.Arn
-      Action: lambda:InvokeFunction
-      Principal: logs.amazonaws.com
-      SourceAccount: !Ref "AWS::AccountId"
+      SourceArn: !GetAtt LogGroupCreatedRule.Arn
 
 Outputs:
-  DeployerFunctionArn:
-    Value: !GetAtt DeployerFunction.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-DeployerFunctionArn"
-  ForwarderRoleArn:
-    Value: !GetAtt ForwarderRole.Arn
-    Description: "ARN of the IAM Role created for CloudWatch Logs to forward events to the destination."
-    Export:
-      Name: !Sub "${AWS::StackName}-ForwarderRoleArn"
+  RelayLambdaArn:
+    Value: !GetAtt RelayLambda.Arn
+    Description: ARN of the Lambda that relays logs to your SaaS API.
+  DeployerLambdaArn:
+    Value: !GetAtt DeployerLambda.Arn
+    Description: ARN of the Lambda that manages log group subscriptions.
 
