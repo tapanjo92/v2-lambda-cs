@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getCurrentUserSession, getAccessToken } from '../../lib/auth';
+import { getCurrentUserSession } from '../../lib/auth';
 import { userPool } from '../../lib/cognito';
+import { AwsClient } from 'aws4fetch';
 
 // Define an interface for the event data for type safety
 interface LambdaEvent {
@@ -28,20 +29,20 @@ export default function DashboardPage() {
     // eslint-disable-next-line
   }, [router]);
 
+  const aws = new AwsClient({
+    accessKeyId: process.env.NEXT_PUBLIC_AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.NEXT_PUBLIC_AWS_SECRET_ACCESS_KEY!,
+    sessionToken: process.env.NEXT_PUBLIC_AWS_SESSION_TOKEN,
+    region: process.env.NEXT_PUBLIC_AWS_REGION || 'us-east-1',
+    service: 'execute-api',
+  });
+
   const fetchEvents = async () => {
     setLoading(true);
-    const token = await getAccessToken();
-    if (!token) {
-      router.replace('/login');
-      return;
-    }
     try {
       // Replace with your actual API Gateway endpoint (from CDK output)
-      const response = await fetch('https://ti7cqgksr2.execute-api.ap-south-1.amazonaws.com/prod/ingest', {
+      const response = await aws.fetch('https://ti7cqgksr2.execute-api.ap-south-1.amazonaws.com/prod/ingest', {
         method: 'GET',
-        headers: {
-          Authorization: token
-        }
       });
       if (response.ok) {
         const items = await response.json();

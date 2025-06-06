@@ -69,12 +69,9 @@ export class LambdaColdStartStack extends Stack {
 
     api.addToResourcePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
-      principals: [new iam.ServicePrincipal(cloudwatchLogsPrincipalCustomerOne)],
+      principals: [new iam.AnyPrincipal()],
       actions: ['execute-api:Invoke'],
       resources: ['*'],
-      conditions: {
-        StringEquals: { 'aws:SourceAccount': customerOneAccountId },
-      },
     }));
 
     // Customer 2
@@ -83,8 +80,12 @@ export class LambdaColdStartStack extends Stack {
     // ## section 7: API Gateway Method Definitions
     // ---
     const ingestResource = api.root.addResource('ingest');
-    ingestResource.addMethod('POST', new apigateway.LambdaIntegration(logProcessor));
-    ingestResource.addMethod('GET', new apigateway.LambdaIntegration(logProcessor));
+    ingestResource.addMethod('POST', new apigateway.LambdaIntegration(logProcessor), {
+      authorizationType: apigateway.AuthorizationType.IAM,
+    });
+    ingestResource.addMethod('GET', new apigateway.LambdaIntegration(logProcessor), {
+      authorizationType: apigateway.AuthorizationType.IAM,
+    });
 
     // ---
     // ## section 8: CDK output for convenience
@@ -96,4 +97,3 @@ export class LambdaColdStartStack extends Stack {
     new CfnOutput(this, 'ApiId', {value: api.restApiId });
   }
 }
-

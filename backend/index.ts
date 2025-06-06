@@ -8,8 +8,7 @@ export async function handler(event: any, context: Context) {
   // For API Gateway proxy integration, event.httpMethod is set
   if (event.httpMethod === 'GET') {
     // Get current user's sub/tenant from Cognito claims
-    const claims = event.requestContext?.authorizer?.claims;
-    const tenantId = claims?.sub || 'demo-tenant'; // You may want to change this logic
+    const tenantId = event.requestContext?.identity?.accountId || 'demo-tenant';
 
     // Optionally: parse query params (e.g. for filtering, pagination)
     const params = {
@@ -33,8 +32,7 @@ export async function handler(event: any, context: Context) {
   // POST: Store event
   if (event.httpMethod === 'POST') {
     let logEvent = event.body ? JSON.parse(event.body) : event;
-    const claims = event.requestContext?.authorizer?.claims;
-    const tenantId = claims?.sub || 'demo-tenant';
+    const tenantId = event.requestContext?.identity?.accountId || 'demo-tenant';
 
     await ddb.put({
       TableName: TABLE_NAME,
@@ -57,4 +55,3 @@ export async function handler(event: any, context: Context) {
     body: JSON.stringify({ error: 'Method not allowed' }),
   };
 }
-
