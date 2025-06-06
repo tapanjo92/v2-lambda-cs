@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { userPool } from '../../lib/cognito';
 import zxcvbn from 'zxcvbn';
 
@@ -11,13 +11,22 @@ export default function SignupPage() {
   const [signedUp, setSignedUp] = useState(false);
 
   // For password strength
-  const passwordScore = zxcvbn(password).score;
+  const strengthResult = useMemo(() => zxcvbn(password), [password]);
+  const passwordScore = strengthResult.score;
   const strengthMsg = [
     "Very weak",
     "Weak",
     "Fair",
     "Strong",
     "Very strong"
+  ][passwordScore];
+  const barWidth = (passwordScore + 1) * 20;
+  const barColor = [
+    "bg-red-500",
+    "bg-orange-500",
+    "bg-yellow-500",
+    "bg-green-500",
+    "bg-green-600"
   ][passwordScore];
 
   const handleSignup = () => {
@@ -26,7 +35,7 @@ export default function SignupPage() {
       return;
     }
     setMsg('Signing up...');
-    userPool.signUp(email, password, [{ Name: 'email', Value: email }], [], (err, result) => {
+    userPool.signUp(email, password, [{ Name: 'email', Value: email }], [], err => {
       if (err) {
         setMsg(err.message || JSON.stringify(err));
       } else {
@@ -54,7 +63,13 @@ export default function SignupPage() {
           value={password}
           onChange={e => setPassword(e.target.value)}
         />
-        <div className={`mb-3 text-sm ${passwordScore < 2 ? "text-red-500" : "text-green-600"}`}>
+        <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+          <div
+            className={`h-full rounded-full ${barColor}`}
+            style={{ width: `${barWidth}%` }}
+          />
+        </div>
+        <div className={`mb-3 text-sm ${passwordScore < 2 ? "text-red-500" : "text-green-600"}`}> 
           Password strength: {strengthMsg}
         </div>
         <button
@@ -75,4 +90,3 @@ export default function SignupPage() {
     </div>
   );
 }
-
