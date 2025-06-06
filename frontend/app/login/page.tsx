@@ -15,7 +15,7 @@ export default function LoginPage() {
     const authDetails = new AuthenticationDetails({ Username: email, Password: password });
 
     user.authenticateUser(authDetails, {
-      onSuccess: (session) => {
+      onSuccess: (_session) => {
         setMsg('Login successful!');
         // Optionally: redirect to dashboard here
         window.location.href = '/dashboard';

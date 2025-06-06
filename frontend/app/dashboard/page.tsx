@@ -5,9 +5,15 @@ import { useRouter } from 'next/navigation';
 import { getCurrentUserSession, getAccessToken } from '../../lib/auth';
 import { userPool } from '../../lib/cognito';
 
+// Define an interface for the event data for type safety
+interface LambdaEvent {
+  timestamp: string | number;
+  event: Record<string, unknown>;
+}
+
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<LambdaEvent[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -44,6 +50,7 @@ export default function DashboardPage() {
         setData([]);
       }
     } catch (err) {
+      console.error("Failed to fetch events:", err);
       setData([]);
     }
     setLoading(false);
@@ -95,4 +102,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

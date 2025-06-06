@@ -13,7 +13,7 @@ export default function VerifyPage() {
   const handleVerify = () => {
     setMsg('Verifying...');
     const user = new CognitoUser({ Username: email, Pool: userPool });
-    user.confirmRegistration(code, true, (err, result) => {
+    user.confirmRegistration(code, true, (err, _result) => {
       if (err) {
         setMsg(err.message || JSON.stringify(err));
       } else {

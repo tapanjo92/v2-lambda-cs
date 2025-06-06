@@ -1,12 +1,12 @@
-import { CognitoUser } from 'amazon-cognito-identity-js';
+import { CognitoUserSession } from 'amazon-cognito-identity-js';
 import { userPool } from './cognito';
 
-export function getCurrentUserSession(): Promise<any | null> {
+export function getCurrentUserSession(): Promise<CognitoUserSession | null> {
   return new Promise((resolve) => {
     const user = userPool.getCurrentUser();
     if (!user) return resolve(null);
 
-    user.getSession((err: any, session: any) => {
+    user.getSession((err: Error | null, session: CognitoUserSession | null) => {
       if (err || !session || !session.isValid()) {
         resolve(null);
       } else {
@@ -21,4 +21,3 @@ export async function getAccessToken(): Promise<string | null> {
   const session = await getCurrentUserSession();
   return session ? session.getAccessToken().getJwtToken() : null;
 }
-
