@@ -17,6 +17,9 @@ Parameters:
   DestUrl:
     Type: String
     Description: Your SaaS API Gateway endpoint (e.g. https://xxx.execute-api.ap-south-1.amazonaws.com/prod/ingest)
+  DestApiArn:
+    Type: String
+    Description: ARN of your SaaS API Gateway (e.g. arn:aws:execute-api:region:account:apiId/*)
 
 Resources:
 
@@ -42,6 +45,14 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: "*"
+        - PolicyName: "AllowInvokeSaaSApi"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - execute-api:Invoke
+                Resource: !Ref DestApiArn
 
   RelayLambda:
     Type: AWS::Lambda::Function
@@ -150,4 +161,3 @@ Outputs:
   DeployerLambdaArn:
     Value: !GetAtt DeployerLambda.Arn
     Description: ARN of the Lambda that manages log group subscriptions.
-

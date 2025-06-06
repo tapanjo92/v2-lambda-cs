@@ -1,7 +1,9 @@
 const https = require('https');
 const zlib = require('zlib');
+const AWS = require('aws-sdk');
 
 const DEST_URL = process.env.DEST_URL;
+const REGION = process.env.AWS_REGION;
 
 exports.handler = async (event) => {
   try {
@@ -13,14 +15,23 @@ exports.handler = async (event) => {
     const data = JSON.stringify(payload);
 
     const url = new URL(DEST_URL);
+
+    const endpoint = new AWS.Endpoint(url.hostname);
+    const signedReq = new AWS.HttpRequest(endpoint, REGION);
+    signedReq.method = 'POST';
+    signedReq.path = url.pathname;
+    signedReq.headers['host'] = endpoint.host;
+    signedReq.headers['Content-Type'] = 'application/json';
+    signedReq.body = data;
+
+    const signer = new AWS.Signers.V4(signedReq, 'execute-api');
+    signer.addAuthorization(AWS.config.credentials, new Date());
+
     const options = {
-      hostname: url.hostname,
-      path: url.pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(data)
-      },
+      hostname: endpoint.hostname,
+      path: signedReq.path,
+      method: signedReq.method,
+      headers: signedReq.headers,
       timeout: 7000 // 7 second timeout
     };
 
@@ -55,4 +66,3 @@ exports.handler = async (event) => {
     throw err;
   }
 };
-

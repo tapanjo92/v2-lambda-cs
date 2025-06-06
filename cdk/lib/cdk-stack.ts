@@ -23,12 +23,7 @@ export class LambdaColdStartStack extends Stack {
       generateSecret: false,
     });
 
-    // 2. Cognito Authorizer for API Gateway
-    const authorizer = new apigateway.CognitoUserPoolsAuthorizer(this, 'ApiAuthorizer', {
-      cognitoUserPools: [userPool],
-    });
-
-    // 3. DynamoDB Table
+    // 2. DynamoDB Table
     const table = new dynamodb.Table(this, 'ColdStartEvents', {
       partitionKey: { name: 'tenantId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
@@ -36,7 +31,7 @@ export class LambdaColdStartStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
-    // 4. Lambda for log processing
+    // 3. Lambda for log processing
     const logProcessor = new lambda.Function(this, 'LogProcessor', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
@@ -47,7 +42,7 @@ export class LambdaColdStartStack extends Stack {
     });
     table.grantReadWriteData(logProcessor);
 
-    // 5. API Gateway
+    // 4. API Gateway
     const api = new apigateway.RestApi(this, 'LambdaColdStartApi', {
       restApiName: 'Lambda Cold Start Service',
       defaultCorsPreflightOptions: {
@@ -67,9 +62,6 @@ export class LambdaColdStartStack extends Stack {
       },
     });
 
-    // ---
-    // ##  sezione 6: Politica delle risorse del gateway API per la sottoscrizione ai log di CloudWatch
-    // ---
 
     // Customer 1
     const customerOneAccountId = '809555764832';
@@ -88,20 +80,14 @@ export class LambdaColdStartStack extends Stack {
     // Customer 2
 
     // ---
-    // ## sezione 7: Definizioni del metodo del gateway API
+    // ## section 7: API Gateway Method Definitions
     // ---
-    const ingestResource = api.root.addResource('ingest');
-    ingestResource.addMethod('POST', new apigateway.LambdaIntegration(logProcessor), {
-      authorizer,
-      authorizationType: apigateway.AuthorizationType.COGNITO,
-    });
-    ingestResource.addMethod('GET', new apigateway.LambdaIntegration(logProcessor), { // Assuming GET is also needed
-      authorizer,
-      authorizationType: apigateway.AuthorizationType.COGNITO,
-    });
-
+     
+    ingestResource.addMethod('POST', new apigateway.LambdaIntegration(logProcessor));
+    ingestResource.addMethod('GET', new apigateway.LambdaIntegration(logProcessor));
+  
     // ---
-    // ## sezione 8: Output CDK per comodità
+    // ## section 8: CDK output for convenience
     // ---
     new CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
     new CfnOutput(this, 'UserPoolClientId', { value: userPoolClient.userPoolClientId });
