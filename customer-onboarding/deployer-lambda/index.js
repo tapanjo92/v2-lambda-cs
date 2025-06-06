@@ -3,6 +3,8 @@ const AWS = require('aws-sdk');
 const logs = new AWS.CloudWatchLogs();
 
 const RELAY_ARN = process.env.RELAY_ARN;
+const RELAY_FUNCTION_NAME = process.env.RELAY_FUNCTION_NAME ||
+  (RELAY_ARN ? RELAY_ARN.split(':').pop() : '');
 
 // Utility: sleep for ms milliseconds
 function sleep(ms) {
@@ -12,6 +14,7 @@ function sleep(ms) {
 // Core logic: subscribe a single log group, with retry/backoff
 async function subscribeLogGroup(logGroupName) {
   if (!logGroupName.startsWith('/aws/lambda/')) return;
+  if (logGroupName === `/aws/lambda/${RELAY_FUNCTION_NAME}`) return;
 
   // Retry logic for throttling
   for (let attempt = 0; attempt < 5; attempt++) {

@@ -105,6 +105,7 @@ Resources:
       Environment:
         Variables:
           RELAY_ARN: !GetAtt RelayLambda.Arn
+          RELAY_FUNCTION_NAME: !Ref RelayLambda
       Code:
         S3Bucket: !Ref DeployerLambdaS3Bucket
         S3Key: !Ref DeployerLambdaS3Key
