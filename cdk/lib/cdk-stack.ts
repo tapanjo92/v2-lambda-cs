@@ -82,10 +82,10 @@ export class LambdaColdStartStack extends Stack {
     // ---
     // ## section 7: API Gateway Method Definitions
     // ---
-     
+    const ingestResource = api.root.addResource('ingest');
     ingestResource.addMethod('POST', new apigateway.LambdaIntegration(logProcessor));
     ingestResource.addMethod('GET', new apigateway.LambdaIntegration(logProcessor));
-  
+
     // ---
     // ## section 8: CDK output for convenience
     // ---
@@ -96,3 +96,4 @@ export class LambdaColdStartStack extends Stack {
     new CfnOutput(this, 'ApiId', {value: api.restApiId });
   }
 }
+
